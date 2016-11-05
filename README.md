@@ -3,7 +3,7 @@ ishell is an interactive shell library for creating interactive cli applications
 
 [![Documentation](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/abiosoft/ishell)
 
-### Usage
+## Usage
 
 ```go
 import "strings"
@@ -42,7 +42,7 @@ Hello Someone Somewhere
 $
 ```
 
-##### Reading input.
+### Reading input.
 ```go
 // simulate an authentication
 shell.Register("login", func(args ...string) (string, error) {
@@ -71,7 +71,7 @@ Password:
 Authentication Successful.
 ```
 
-##### How about multiline input.
+### Multiline input.
 Builtin support for multiple lines.
 ```
 >>> This is \
@@ -103,8 +103,21 @@ You wrote:
 this is user defined
 multiline input;
 ```
+### Keyboard interrupt.
+Builtin interrupt handler.
+```
+>>> ^C
+Input Ctrl-C once more to exit
+>>> ^C
+Interrupted
+exit status 1
+```
+Custom
+```go
+shell.RegisterInterrupt(func(args ...string) (string, error) { ... })
+```
 
-##### Durable history.
+### Durable history.
 ```go
 // Read and write history to $HOME/.ishell_history
 shell.SetHomeHistoryPath(".ishell_history")
@@ -112,31 +125,31 @@ shell.SetHomeHistoryPath(".ishell_history")
 
 Check example code for more.
 
-### Supported Platforms
+## Supported Platforms
 * [x] Linux
 * [x] OSX
 * [x] Windows
 
-### Note
+## Note
 ishell is in active development and can still change significantly.
 
-### Roadmap (in no particular order)
+## Roadmap (in no particular order)
 * [x] Support multiline inputs.
 * [x] Command history.
 * [x] Tab completion.
+* [x] Handle ^C interrupts.
 * [ ] Subcommands and help texts.
-* [ ] Handle ^C interrupts.
 * [ ] Coloured outputs.
 * [ ] Testing, testing, testing.
 
-### Contribution
+## Contribution
 1. Create an issue to discuss it.
 2. Send in Pull Request.
 
-### License
+## License
 MIT
 
-### Credits
+## Credits
 Library | Use
 ------- | -----
 [github.com/flynn/go-shlex](http://github.com/flynn/go-shlex) | splitting input into command and args.

@@ -3,6 +3,7 @@ package ishell
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,16 +23,19 @@ const (
 	defaultNextPrompt = "... "
 )
 
+// Shell is an interactive cli shell.
 type Shell struct {
-	functions   map[string]CmdFunc
-	generic     CmdFunc
-	reader      *shellReader
-	writer      io.Writer
-	active      bool
-	activeMutex sync.RWMutex
-	ignoreCase  bool
-	haltChan    chan struct{}
-	historyFile string
+	functions      map[string]CmdFunc
+	generic        CmdFunc
+	interrupt      CmdFunc
+	interruptCount int
+	reader         *shellReader
+	writer         io.Writer
+	active         bool
+	activeMutex    sync.RWMutex
+	ignoreCase     bool
+	haltChan       chan struct{}
+	historyFile    string
 }
 
 // New creates a new shell with default settings. Uses standard output and default prompt ">> ".
@@ -90,28 +94,37 @@ shell:
 		if err == io.EOF {
 			fmt.Println("EOF")
 			break
-		} else if err != nil {
+		} else if err != nil && err != readline.ErrInterrupt {
 			s.Println("Error:", err)
-			break
 		}
 
-		if len(line) == 0 {
-			continue
-		}
+		if err == readline.ErrInterrupt {
+			// interrupt received
+			err = handleInterrupt(s, line)
+		} else {
+			// reset interrupt counter
+			s.interruptCount = 0
 
-		err = handleInput(s, line)
+			// normal flow
+			if len(line) == 0 {
+				// no input line
+				continue
+			}
+
+			err = handleInput(s, line)
+		}
 		if err1, ok := err.(shellError); ok && err != nil {
 			switch err1.level {
-			case LevelWarn:
+			case warnLevel:
 				s.Println("Warning:", err)
 				continue shell
-			case LevelStop:
+			case stopLevel:
 				s.Println(err)
 				break shell
-			case LevelExit:
+			case exitLevel:
 				s.Println(err)
 				os.Exit(1)
-			case LevelPanic:
+			case panicLevel:
 				panic(err)
 			}
 		} else if !ok && err != nil {
@@ -135,7 +148,7 @@ func handleInput(s *Shell, line []string) error {
 
 	// Generic handler
 	if s.generic == nil {
-		return errNoHandler
+		return noHandlerErr
 	}
 	output, err := s.generic(line...)
 	if err != nil {
@@ -147,8 +160,18 @@ func handleInput(s *Shell, line []string) error {
 	return nil
 }
 
+func handleInterrupt(s *Shell, line []string) error {
+	if s.interrupt == nil {
+		return errors.New("No interrupt handler")
+	}
+	output, err := s.interrupt(line...)
+	if output != "" {
+		s.Println(output)
+	}
+	return err
+}
+
 func (s *Shell) handleCommand(str []string) (bool, error) {
-	//	str := strings.SplitN(line, " ", 2)
 	cmd := str[0]
 	if s.ignoreCase {
 		cmd = strings.ToLower(cmd)
@@ -283,8 +306,7 @@ func (s *Shell) ReadMultiLines(terminator string) string {
 }
 
 // ReadPassword reads password from standard input without echoing the characters.
-// If mask is true, each character will be represented with asterisks '*'. Note that
-// this only works as expected when the standard input is a terminal.
+// Note that this only works as expected when the standard input is a terminal.
 func (s *Shell) ReadPassword() string {
 	return s.reader.readPassword()
 }
@@ -310,7 +332,7 @@ func (s *Shell) Register(command string, function CmdFunc) {
 	// yet than to regenerate the AutoComplete
 	// TODO modify when available
 	var pcItems []readline.PrefixCompleterInterface
-	for word, _ := range s.functions {
+	for word := range s.functions {
 		pcItems = append(pcItems, readline.PcItem(word))
 	}
 
@@ -337,6 +359,11 @@ func (s *Shell) Unregister(command string) {
 // first argument to CmdFunc.
 func (s *Shell) RegisterGeneric(function CmdFunc) {
 	s.generic = function
+}
+
+// RegisterInterrupt registers a function to handle keyboard interrupt.
+func (s *Shell) RegisterInterrupt(function CmdFunc) {
+	s.interrupt = function
 }
 
 // SetPrompt sets the prompt string. The string to be displayed before the cursor.
